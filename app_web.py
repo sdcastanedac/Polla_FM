@@ -1,27 +1,23 @@
 import streamlit as st
 import pandas as pd
 import os
+import altair as alt  # <-- Nueva librería para gráficas avanzadas
 
 # ----------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
 # ----------------------------------------
 st.set_page_config(page_title="Polla Mundialista", page_icon="⚽", layout="wide")
 
-# Diseño CSS personalizado (Estilo Premium, Limpio y Tonos Pasteles)
+# Diseño CSS personalizado (Garantiza fondo claro y textos oscuros legibles)
 st.markdown("""
     <style>
-    /* Fondo general de la app (Gris neutro muy suave / Off-white) */
     .stApp {
         background-color: #f8f9fa;
     }
-    
-    /* Textos principales en gris oscuro/azul oscuro para excelente lectura */
     h1, h2, h3, p, span {
         color: #1e293b !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    /* Estilo del Título Principal */
     .titulo-principal {
         color: #0f172a !important;
         font-weight: 800;
@@ -29,8 +25,6 @@ st.markdown("""
         margin-bottom: 5px;
         line-height: 1.2;
     }
-    
-    /* Subtítulo en tono pastel/neutro azulado */
     .subtitulo {
         color: #64748b !important;
         font-size: 1.3em;
@@ -38,8 +32,6 @@ st.markdown("""
         margin-top: 0px;
         margin-bottom: 25px;
     }
-    
-    /* Ajuste fino para los bordes y contenedores de las métricas */
     div[data-testid="stMetricSimpleValue"] {
         font-size: 1.8rem !important;
         font-weight: 700 !important;
@@ -49,16 +41,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------
-# ENCABEZADO (Escudo superior izquierdo + Títulos)
+# ENCABEZADO
 # ----------------------------------------
-# Usamos columnas para posicionar el escudo a la izquierda y el texto al lado
 col_escudo, col_texto = st.columns([1, 5])
 
 with col_escudo:
-    # Reemplaza esta URL por el enlace directo de la imagen del escudo que desees usar
-    # También puedes subir un archivo 'escudo.png' a GitHub y escribir aquí "escudo.png"
     url_escudo = "https://upload.wikimedia.org/wikipedia/commons/b/b5/Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg"
-    
     st.image(url_escudo, width=110)
 
 with col_texto:
@@ -75,18 +63,18 @@ ruta_grupos = 'Ranking_Diario_Fase_Grupos.csv'
 
 df = None
 fase_actual = ""
-color_grafica = "#3b82f6" # Azul pastel/tecnológico por defecto
+color_grafica = "#3b82f6" 
 
 if os.path.exists(ruta_eliminatorias):
     df = pd.read_csv(ruta_eliminatorias)
     fase_actual = "Clasificación General (Fase de Grupos + Eliminatorias)"
     columna_orden = 'Total_General'
-    color_grafica = "#0284c7" # Azul cielo profundo para eliminatorias
+    color_grafica = "#0284c7" # Azul cielo profundo
 elif os.path.exists(ruta_grupos):
     df = pd.read_csv(ruta_grupos)
     fase_actual = "Clasificación - Fase de Grupos"
     columna_orden = 'Puntos_Grupos'
-    color_grafica = "#f59e0b" # Dorado/Ámbar suave para grupos
+    color_grafica = "#f59e0b" # Dorado pastel
 else:
     st.warning("Esperando la carga de los primeros resultados consolidados...")
 
@@ -96,13 +84,11 @@ else:
 if df is not None:
     st.markdown(f"#### 📍 Etapa Actual: **{fase_actual}**")
     
-    # 1. SECCIÓN DEL PODIO (Tarjetas limpias con fondo claro)
+    # 1. EL PODIO
     st.markdown("### 🏆 Líderes de la Jornada")
     col1, col2, col3 = st.columns(3)
     
-    # Formato amigable para destacar los 3 primeros lugares
     if len(df) >= 1:
-        col2.background_color = "#ffffff"
         col2.metric("🥇 1er Puesto", df.iloc[0]['Participante'], f"{df.iloc[0][columna_orden]} Puntos")
     if len(df) >= 2:
         col1.metric("🥈 2do Puesto", df.iloc[1]['Participante'], f"{df.iloc[1][columna_orden]} Puntos")
@@ -111,17 +97,47 @@ if df is not None:
         
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. GRÁFICA DE BARRAS (Ahora limpia y con fondo claro nativo)
+    # 2. GRÁFICA AVANZADA (SIN FONDO NEGRO Y CON EJES CLAROS)
     st.markdown("### 📊 Tendencia de Puntuaciones")
-    df_grafica = df.set_index('Participante')
-    # Al estar sobre fondo claro, la gráfica se dibuja automáticamente sin cuadros negros oscuros
-    st.bar_chart(df_grafica[columna_orden], color=color_grafica)
+    
+    # Configuración de la gráfica forzando estilo claro y bordes redondeados
+    grafica = alt.Chart(df).mark_bar(
+        color=color_grafica, 
+        cornerRadiusTopLeft=4, 
+        cornerRadiusTopRight=4,
+        size=40 # Grosor de las barras
+    ).encode(
+        x=alt.X('Participante:N', 
+                sort='-y', # Ordenar de mayor a menor puntaje
+                axis=alt.Axis(
+                    labelAngle=-45, 
+                    labelColor="#1e293b", # Texto del eje X gris oscuro
+                    title="Participantes",
+                    titleColor="#1e293b",
+                    labelFontSize=12,
+                    grid=False # Sin rayas verticales de fondo
+                )),
+        y=alt.Y(f'{columna_orden}:Q', 
+                axis=alt.Axis(
+                    labelColor="#1e293b", # Texto del eje Y gris oscuro
+                    title="Puntos",
+                    titleColor="#1e293b",
+                    gridColor="#e2e8f0", # Líneas guía de fondo muy suaves
+                    labelFontSize=12
+                )),
+        tooltip=['Participante', alt.Tooltip(f'{columna_orden}:Q', title='Puntos')]
+    ).properties(
+        height=400,
+        background='transparent' # Se adapta perfectamente al color de la app
+    )
+
+    # ¡IMPORTANTE!: theme=None es lo que impide que Streamlit lo ponga negro en modo oscuro
+    st.altair_chart(grafica, use_container_width=True, theme=None)
     
     st.divider()
 
     # 3. TABLA DE POSICIONES COMPLETA
     st.markdown("### 📋 Tabla General de Posiciones")
-    # Mostramos la tabla con un sutil resalte verde pastel en el puntaje máximo
     st.dataframe(
         df.style.highlight_max(subset=[columna_orden], color='#bbf7d0')
                 .format(precision=0),
