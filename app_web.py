@@ -6,7 +6,7 @@ import altair as alt
 # ----------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
 # ----------------------------------------
-st.set_page_config(page_title="Polla Mundialista Fábrica de Moneda", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="Polla Mundialista Callejera", page_icon="⚽", layout="wide")
 
 # PALETA DE COLORES INSTITUCIONAL
 COLOR_PRINCIPAL = "#003870"  
@@ -91,9 +91,9 @@ st.markdown(f"""
 if os.path.exists("escudo.png"):
     col_img, col_tit = st.columns([1, 8])
     with col_img:
-        st.image("escudo.png", width=100)
+        st.image("mascotas2026.png", width=100)
     with col_tit:
-        st.markdown(f"<h1 class='titulo-principal'>GRAN POLLA MUNDIALISTA FÁBRICA DE MONEDA</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='titulo-principal'>GRAN POLLA MUNDIALISTA CALLEJERA</h1>", unsafe_allow_html=True)
         st.markdown("<p class='subtitulo'>⚽ Panel Oficial de Resultados y Posiciones en Tiempo Real</p>", unsafe_allow_html=True)
 else:
     url_alternativa = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg/512px-Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg.png"
@@ -101,7 +101,7 @@ else:
     with col_img:
         st.image(url_alternativa, width=100)
     with col_tit:
-        st.markdown(f"<h1 class='titulo-principal'>GRAN POLLA MUNDIALISTA FÁBRICA DE MONEDA</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='titulo-principal'>GRAN POLLA MUNDIALISTA CALLEJERA</h1>", unsafe_allow_html=True)
         st.markdown("<p class='subtitulo'>⚽ Panel Oficial de Resultados y Posiciones en Tiempo Real</p>", unsafe_allow_html=True)
 
 st.divider()
