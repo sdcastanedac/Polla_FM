@@ -88,7 +88,7 @@ st.markdown(f"""
 # ----------------------------------------
 # ENCABEZADO
 # ----------------------------------------
-if os.path.exists("escudo.png"):
+if os.path.exists("mascotas2026.png"):
     col_img, col_tit = st.columns([1, 8])
     with col_img:
         st.image("mascotas2026.png", width=100)
