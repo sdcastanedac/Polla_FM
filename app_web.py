@@ -88,10 +88,10 @@ st.markdown(f"""
 # ----------------------------------------
 # ENCABEZADO
 # ----------------------------------------
-if os.path.exists("mascotas2026.png"):
+if os.path.exists("Mascotas2026.png"):
     col_img, col_tit = st.columns([1, 8])
     with col_img:
-        st.image("mascotas2026.png", width=100)
+        st.image("Mascotas2026.png", width=100)
     with col_tit:
         st.markdown(f"<h1 class='titulo-principal'>GRAN POLLA MUNDIALISTA CALLEJERA</h1>", unsafe_allow_html=True)
         st.markdown("<p class='subtitulo'>⚽ Panel Oficial de Resultados y Posiciones en Tiempo Real</p>", unsafe_allow_html=True)
