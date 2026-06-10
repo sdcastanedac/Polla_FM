@@ -261,7 +261,7 @@ if df is not None and not df.empty:
             </p>
         """, unsafe_allow_html=True)
 
-        max_pts = int(df[col_orden].max()) if not df.empty else 1
+        max_pts = int(df[col_orden].max()) if not df.empty and df[col_orden].max() > 0 else 1
         # Gradiente de azules según posición
         colores_barra = [AZUL, AZUL_MED, "#378ADD", "#85B7EB", "#B5D4F4", "#D0E8F8"]
 
