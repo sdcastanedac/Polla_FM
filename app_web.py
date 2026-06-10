@@ -231,17 +231,17 @@ if df is not None and not df.empty:
                 if ci == 0:
                     tds += (
                         f"<td style='padding:9px 10px;border-bottom:0.5px solid {BORDE};"
-                        f"background:{bg};font-weight:{fw};font-size:.82em'>"
+                        f"background:{bg};font-weight:{fw};font-size:.82em;color:#1A2530'>"
                         f"{medal} {val}</td>"
-                    )
+                        )
                 else:
                     tds += (
                         f"<td style='padding:9px 10px;border-bottom:0.5px solid {BORDE};"
-                        f"background:{bg};text-align:center'>"
+                        f"background:{bg};text-align:center;color:#1A2530'>"
                         f"<span style='background:{AZUL};color:#fff;font-size:.75em;"
                         f"font-weight:700;padding:2px 9px;border-radius:20px'>"
                         f"{int(val)}</span></td>"
-                    )
+                        )
             rows += f"<tr>{tds}</tr>"
 
         tabla_completa = (
