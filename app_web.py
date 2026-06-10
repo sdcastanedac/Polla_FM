@@ -77,7 +77,7 @@ col_tit, col_logo = st.columns([7, 1])
 with col_tit:
     st.markdown(f"""
     <div style='background:{AZUL};border-radius:12px;padding:20px 28px;margin-bottom:6px'>
-        <h1 style='color:#fff;font-size:2.0em;font-weight:800;margin:0;line-height:1.2'>
+        <h1 style='color:#fff;font-size:2.2em;font-weight:800;margin:0;line-height:1.2'>
             Gran Polla Mundialista Callejera
         </h1>
         <p style='color:{DORADO};margin:5px 0 10px;font-size:1.12em;font-weight:400'>
