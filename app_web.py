@@ -120,7 +120,7 @@ def card_podio(emoji, nombre, pts, bg, borde_color, pts_color):
         f"<div style='background:{bg};border:0.5px solid {borde_color};border-radius:10px;"
         f"padding:16px 12px;text-align:center'>"
         f"<div style='font-size:3em;margin-bottom:6px'>{emoji}</div>"
-        f"<div style='font-size:1.9em;font-weight:700;color:{AZUL};"
+        f"<div style='font-size:1.4em;font-weight:700;color:{AZUL};"
         f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{nombre}</div>"
         f"<div style='font-size:1.8em;font-weight:800;color:{pts_color};"
         f"margin:4px 0 2px'>{pts}</div>"
