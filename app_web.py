@@ -336,7 +336,6 @@ elif os.path.exists(ARCHIVO_REALES_GRP):
     df_grp = pd.read_excel(ARCHIVO_REALES_GRP)
 
     df_jugados    = df_grp.dropna(subset=["Goles L", "Goles V"])
-    df_pendientes = df_grp[df_grp["Goles L"].isna() & df_grp["Equipo Local"].notna()].head(12)
 
     if not df_jugados.empty:
         for grupo in df_jugados["Grupo"].unique():
@@ -354,18 +353,7 @@ elif os.path.exists(ARCHIVO_REALES_GRP):
                 unsafe_allow_html=True
             )
 
-    if not df_pendientes.empty:
-        st.markdown(seccion_fase("Próximos partidos", "🕐"), unsafe_allow_html=True)
-        cards = "".join(
-            tarjeta_partido(row["Equipo Local"], row["Equipo Visitante"], "-", "-")
-            for _, row in df_pendientes.iterrows()
-        )
-        st.markdown(
-            f"<div style='display:flex;flex-wrap:wrap;gap:12px'>{cards}</div>",
-            unsafe_allow_html=True
-        )
-
-    if df_jugados.empty and df_pendientes.empty:
+    if df_jugados.empty:
         st.info("Aún no hay marcadores registrados. ¡A la espera del partido inaugural!")
 
 else:
