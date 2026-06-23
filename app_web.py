@@ -223,7 +223,7 @@ if df is not None and not df.empty:
                   col_orden: "Puntos"}
 
         th = "".join(
-            f"<th style='background:{AZUL};color:#fff;padding:9px 10px;font-size:.78em;"
+            f"<th style='background:{AZUL};color:#fff;padding:9px 10px;font-size:.98em;"
             f"font-weight:600;text-align:left;position:sticky;top:0'>{labels.get(c,c)}</th>"
             for c in cols_mostrar
         )
