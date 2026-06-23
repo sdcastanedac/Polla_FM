@@ -372,13 +372,14 @@ if df is not None and not df.empty:
                         else:
                             tarjeta_bg, tarjeta_bord, badge_bg, badge_text, badge_label = ROJO_CLA, ROJO, ROJO, "#FFFFFF", "Sin Acierto"
                 
+                # DISEÑO ULTRA-COMPACTO (Predicción al lado derecho en una sola línea)
                 html_predicciones += (
-                    f"<div style='background:{tarjeta_bg}; border: 1px solid {tarjeta_bord}; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<div>"
-                    f"<div style='font-weight: 700; color: {TEXTO}; font-size: 0.85em;'>{participante_nom}</div>"
-                    f"<div style='font-size: 0.82em; color: #5A6A85; margin-top:2px;'>Predicción: {txt_pred}</div>"
+                    f"<div style='background:{tarjeta_bg}; border: 1px solid {tarjeta_bord}; border-radius: 6px; padding: 6px 12px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;'>"
+                    f"<div style='display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;'>"
+                    f"<span style='font-weight: 700; color: {TEXTO}; font-size: 0.84em;'>{participante_nom}</span>"
+                    f"<span style='font-size: 0.82em; color: #5A6A85;'>• Pred: {txt_pred}</span>"
                     f"</div>"
-                    f"<span style='background:{badge_bg}; color:{badge_text}; font-size: 0.7em; font-weight: 700; padding: 4px 10px; border-radius: 12px;'>{badge_label}</span>"
+                    f"<span style='background:{badge_bg}; color:{badge_text}; font-size: 0.68em; font-weight: 700; padding: 2px 8px; border-radius: 10px; flex-shrink: 0;'>{badge_label}</span>"
                     f"</div>"
                 )
             
