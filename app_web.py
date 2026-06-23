@@ -12,19 +12,23 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# PALETA
+# PALETA DE COLORES
 # ─────────────────────────────────────────────
-AZUL      = "#003870"
-AZUL_MED  = "#185FA5"
-AZUL_CLA  = "#E6F1FB"
-DORADO    = "#D4AF37"
-DORADO_CLA= "#FFF8DC"
-TEXTO     = "#1A2530"
-FONDO     = "#F4F6F9"
-BORDE     = "#DDE2EA"
-VERDE     = "#0F6E56"
-VERDE_CLA = "#E1F5EE"
-GRIS      = "#EEF0F3"
+AZUL       = "#003870"
+AZUL_MED   = "#185FA5"
+AZUL_CLA   = "#E6F1FB"
+DORADO     = "#D4AF37"
+DORADO_CLA = "#FFF8DC"
+TEXTO      = "#1A2530"
+FONDO      = "#F4F6F9"
+BORDE      = "#DDE2EA"
+VERDE      = "#0F6E56"
+VERDE_CLA  = "#E1F5EE"
+GRIS       = "#EEF0F3"
+
+# Colores adicionales para los estados de predicción
+ROJO       = "#C5221F"
+ROJO_CLA   = "#FCE8E6"
 
 # ─────────────────────────────────────────────
 # CSS GLOBAL
@@ -64,6 +68,7 @@ RUTA_RANKING_ELIM   = "Ranking_General_Acumulado.csv"
 RUTA_RANKING_GRUPOS = "Ranking_Diario_Fase_Grupos.csv"
 ARCHIVO_REALES_ELIM = "Resultados_Reales_Eliminatorias.xlsx"
 ARCHIVO_REALES_GRP  = "Resultados_Reales_Grupos.xlsx"
+RUTA_CONSOLIDADO    = "consolidado_mundial.xlsx"
 IMAGEN_MASCOTA      = "Mascotas2026.png"
 IMG_FALLBACK        = ("https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/"
                        "Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg/"
@@ -99,7 +104,7 @@ with col_logo:
 # ─────────────────────────────────────────────
 # CARGA DE DATOS DE RANKING
 # ─────────────────────────────────────────────
-df        = None
+df          = None
 fase_actual = ""
 col_orden   = ""
 
@@ -164,7 +169,7 @@ def seccion_fase(label, icon="⚽"):
     )
 
 # ─────────────────────────────────────────────
-# SECCIÓN PRINCIPAL: PODIO + TABLA + BARRAS
+# SECCIÓN PRINCIPAL: PODIO + TABLA + INSPECTOR INTERACTIVO
 # ─────────────────────────────────────────────
 if df is not None and not df.empty:
     df = df.sort_values(by=col_orden, ascending=False).reset_index(drop=True)
@@ -199,10 +204,10 @@ if df is not None and not df.empty:
 
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
 
-    # ── Tabla + Barras ─────────────────────────────────────────────────────
-    col_tabla, col_barras = st.columns(2)
+    # ── Tabla de Posiciones + Inspector de Predicciones ────────────────────
+    col_tabla, col_interactivo = st.columns(2)
 
-    # TABLA — todo el HTML en un solo st.markdown
+    # COLUMNA IZQUIERDA: TABLA DE POSICIONES
     with col_tabla:
         cols_mostrar = ["Participante", col_orden]
         if "Puntos_Grupos" in df.columns and col_orden != "Puntos_Grupos":
@@ -246,7 +251,7 @@ if df is not None and not df.empty:
 
         tabla_completa = (
             f"<div style='background:#fff;border:0.5px solid {BORDE};border-radius:10px;"
-            f"padding:16px;height:340px;overflow-y:auto'>"
+            f"padding:16px;height:380px;overflow-y:auto'>"
             f"<p style='font-size:.78em;font-weight:700;color:{AZUL};"
             f"text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px'>"
             f"📋 Tabla de posiciones</p>"
@@ -257,41 +262,136 @@ if df is not None and not df.empty:
         )
         st.markdown(tabla_completa, unsafe_allow_html=True)
 
-    # BARRAS — todo el HTML en un solo st.markdown
-    with col_barras:
-        max_pts = int(df[col_orden].max()) if not df.empty and df[col_orden].max() > 0 else 1
-        colores = [AZUL, AZUL_MED, "#378ADD", "#85B7EB", "#B5D4F4", "#D0E8F8"]
-
-        barras = ""
-        for i, (_, row) in enumerate(df.iterrows()):
-            nombre = str(row["Participante"])
-            pts    = int(row[col_orden])
-            pct    = round(pts / max_pts * 100)
-            color  = colores[min(i, len(colores)-1)]
-            txt_c  = "#fff" if i < 4 else AZUL
-            corto  = nombre[:14] + "…" if len(nombre) > 14 else nombre
-            barras += (
-                f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:9px'>"
-                f"<span style='font-size:.76em;color:{TEXTO};width:88px;flex-shrink:0;"
-                f"text-align:right;white-space:nowrap;overflow:hidden;"
-                f"text-overflow:ellipsis'>{corto}</span>"
-                f"<div style='flex:1;background:{GRIS};border-radius:20px;height:18px;overflow:hidden'>"
-                f"<div style='width:{pct}%;height:100%;background:{color};border-radius:20px;"
-                f"display:flex;align-items:center;padding-left:7px;font-size:.72em;"
-                f"font-weight:700;color:{txt_c};min-width:24px'>{pts}</div>"
-                f"</div></div>"
+    # COLUMNA DERECHA: ELEMENTO INTERACTIVO (INSPECTOR DE PARTIDOS)
+    with col_interactivo:
+        st.markdown(f"""
+        <div style='margin-bottom:2px'>
+            <p style='font-size:.78em;font-weight:700;color:{AZUL};
+            text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px 0'>
+            🔍 Inspector de Predicciones por Partido
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if os.path.exists(RUTA_CONSOLIDADO):
+            # Cargar archivo consolidado maestro
+            df_preds = pd.read_excel(RUTA_CONSOLIDADO)
+            
+            # Formatear el texto descriptivo del partido para el selector
+            df_preds['Partido_Display'] = df_preds['Equipo Local'] + " vs " + df_preds['Equipo Visitante']
+            partidos_disponibles = df_preds['Partido_Display'].unique()
+            
+            # Componente de selección nativo de Streamlit
+            partido_seleccionado = st.selectbox(
+                "Selecciona un encuentro deportivo:",
+                options=partidos_disponibles,
+                label_visibility="collapsed"
             )
-
-        barras_completo = (
-            f"<div style='background:#fff;border:0.5px solid {BORDE};border-radius:10px;"
-            f"padding:16px;height:340px;overflow-y:auto'>"
-            f"<p style='font-size:.78em;font-weight:700;color:{AZUL};"
-            f"text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px'>"
-            f"📊 Puntuaciones</p>"
-            f"{barras}"
-            f"</div>"
-        )
-        st.markdown(barras_completo, unsafe_allow_html=True)
+            
+            # Filtrar predicciones del partido seleccionado
+            df_partido = df_preds[df_preds['Partido_Display'] == partido_seleccionado]
+            equipo_l = df_partido.iloc[0]['Equipo Local']
+            equipo_v = df_partido.iloc[0]['Equipo Visitante']
+            
+            # ── Búsqueda del marcador real en las bases de datos de resultados ──
+            goles_real_l, goles_real_v = None, None
+            partido_jugado = False
+            
+            # Intentar buscar en Fase de Grupos
+            if os.path.exists(ARCHIVO_REALES_GRP):
+                df_r_grp = pd.read_excel(ARCHIVO_REALES_GRP)
+                m_real = df_r_grp[(df_r_grp['Equipo Local'] == equipo_l) & (df_r_grp['Equipo Visitante'] == equipo_v)]
+                if not m_real.empty and pd.notna(m_real.iloc[0].get('Goles L')) and pd.notna(m_real.iloc[0].get('Goles V')):
+                    goles_real_l = m_real.iloc[0]['Goles L']
+                    goles_real_v = m_real.iloc[0]['Goles V']
+                    partido_jugado = True
+            
+            # Si no se encuentra, intentar buscar en Eliminatorias
+            if not partido_jugado and os.path.exists(ARCHIVO_REALES_ELIM):
+                df_r_elim = pd.read_excel(ARCHIVO_REALES_ELIM)
+                m_real = df_r_elim[(df_r_elim['Equipo Local'] == equipo_l) & (df_r_elim['Equipo Visitante'] == equipo_v)]
+                if not m_real.empty and pd.notna(m_real.iloc[0].get('Goles L')) and pd.notna(m_real.iloc[0].get('Goles V')):
+                    goles_real_l = m_real.iloc[0]['Goles L']
+                    goles_real_v = m_real.iloc[0]['Goles V']
+                    partido_jugado = True
+            
+            # Renderizar el marcador real oficial en cabecera corta
+            if partido_jugado and goles_real_l != "-" and goles_real_v != "-":
+                goles_real_l, goles_real_v = int(goles_real_l), int(goles_real_v)
+                st.markdown(f"""
+                <div style='background:{GRIS}; padding:6px 12px; border-radius:6px; margin-bottom:10px; font-size:0.82em; text-align:center; font-weight:600;'>
+                    Marcador Oficial: {equipo_l} {goles_real_l} - {goles_real_v} {equipo_v}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style='background:{GRIS}; padding:6px 12px; border-radius:6px; margin-bottom:10px; font-size:0.82em; text-align:center; color:#5A6A85;'>
+                    ⏳ Este partido no se ha jugado o no tiene un resultado oficial registrado.
+                </div>
+                """, unsafe_allow_html=True)
+                
+            # Construcción dinámica de las tarjetas evaluadas por participante
+            html_predicciones = ""
+            for _, pred in df_partido.iterrows():
+                participante_nom = pred['Participante']
+                pred_l = int(pred['Goles L']) if pd.notna(pred['Goles L']) else 0
+                pred_v = int(pred['Goles V']) if pd.notna(pred['Goles V']) else 0
+                
+                # Diseño por defecto (En caso de que el partido no se haya jugado)
+                tarjeta_bg   = "#FFFFFF"
+                tarjeta_bord = BORDE
+                badge_bg     = GRIS
+                badge_text   = "#5A6A85"
+                badge_label  = "Pendiente"
+                
+                if partido_jugado and goles_real_l != "-" and goles_real_v != "-":
+                    # Calcular tendencias reales y predichas (-1: Visita, 0: Empate, 1: Local)
+                    tendencia_real = (goles_real_l > goles_real_v) - (goles_real_l < goles_real_v)
+                    tendencia_pred = (pred_l > pred_v) - (pred_l < pred_v)
+                    
+                    if pred_l == goles_real_l and pred_v == goles_real_v:
+                        # VERDE: Marcador Exacto
+                        tarjeta_bg   = VERDE_CLA
+                        tarjeta_bord = VERDE
+                        badge_bg     = VERDE
+                        badge_text   = "#FFFFFF"
+                        badge_label  = "Marcador Exacto"
+                    elif tendencia_real == tendencia_pred:
+                        # AZUL: Acertó ganador o empate
+                        tarjeta_bg   = AZUL_CLA
+                        tarjeta_bord = AZUL_MED
+                        badge_bg     = AZUL_MED
+                        badge_text   = "#FFFFFF"
+                        badge_label  = "Acertó Resultado"
+                    else:
+                        # ROJO: No acertó nada
+                        tarjeta_bg   = ROJO_CLA
+                        tarjeta_bord = ROJO
+                        badge_bg     = ROJO
+                        badge_text   = "#FFFFFF"
+                        badge_label  = "Sin Acierto"
+                
+                html_predicciones += f"""
+                <div style='background:{tarjeta_bg}; border: 1px solid {tarjeta_bord}; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;'>
+                    <div>
+                        <div style='font-weight: 700; color: {TEXTO}; font-size: 0.85em;'>{participante_nom}</div>
+                        <div style='font-size: 0.82em; color: #5A6A85; margin-top:2px;'>Predicción: <b>{pred_l} - {pred_v}</b></div>
+                    </div>
+                    <span style='background:{badge_bg}; color:{badge_text}; font-size: 0.7em; font-weight: 700; padding: 4px 10px; border-radius: 12px;'>
+                        {badge_label}
+                    </span>
+                </div>
+                """
+            
+            # Renderizar el contenedor de predicciones con scroll interno fijo de 300px
+            st.markdown(f"""
+            <div style='background:#FFF; border:0.5px solid {BORDE}; border-radius:10px; padding:12px; height:315px; overflow-y:auto;'>
+                {html_predicciones}
+            </div>
+            """, unsafe_allow_html=True)
+            
+        else:
+            st.warning("⚠️ No se encontró el archivo 'consolidado_mundial.xlsx'. Asegúrate de generar el consolidado antes de subir la app.")
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -318,8 +418,8 @@ if os.path.exists(ARCHIVO_REALES_ELIM):
             cards = "".join(
                 tarjeta_partido(
                     row["Equipo Local"], row["Equipo Visitante"],
-                    int(row["Goles L"]) if pd.notna(row.get("Goles L")) else "-",
-                    int(row["Goles V"]) if pd.notna(row.get("Goles V")) else "-",
+                    int(row["Goles L"]) if pd.notna(row.get("Goles L")) and row["Goles L"] != "-" else "-",
+                    int(row["Goles V"]) if pd.notna(row.get("Goles V")) and row["Goles V"] != "-" else "-",
                     row["Clasificado a sig. ronda"] if pd.notna(row.get("Clasificado a sig. ronda")) else ""
                 )
                 for _, row in df_fase.iterrows()
@@ -334,8 +434,7 @@ if os.path.exists(ARCHIVO_REALES_ELIM):
 # ── FASE DE GRUPOS ─────────────────────────────────────────────────────────
 elif os.path.exists(ARCHIVO_REALES_GRP):
     df_grp = pd.read_excel(ARCHIVO_REALES_GRP)
-
-    df_jugados    = df_grp.dropna(subset=["Goles L", "Goles V"])
+    df_jugados = df_grp.dropna(subset=["Goles L", "Goles V"])
 
     if not df_jugados.empty:
         for grupo in df_jugados["Grupo"].unique():
@@ -344,7 +443,8 @@ elif os.path.exists(ARCHIVO_REALES_GRP):
             cards = "".join(
                 tarjeta_partido(
                     row["Equipo Local"], row["Equipo Visitante"],
-                    int(row["Goles L"]), int(row["Goles V"])
+                    int(row["Goles L"]) if row["Goles L"] != "-" else "-", 
+                    int(row["Goles V"]) if row["Goles V"] != "-" else "-"
                 )
                 for _, row in df_g.iterrows()
             )
