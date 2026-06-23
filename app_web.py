@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN DE PÁGINA
@@ -45,16 +46,6 @@ div[data-testid="stMetric"] {{
     border-radius: 10px;
     padding: 16px 20px;
 }}
-div[data-testid="stMetricLabel"] p {{
-    font-size: .82em !important;
-    color: #5A6A85 !important;
-    font-weight: 600 !important;
-}}
-div[data-testid="stMetricValue"] {{
-    font-size: 1.6rem !important;
-    font-weight: 800 !important;
-    color: {AZUL} !important;
-}}
 hr {{ border-color: {BORDE}; margin: 20px 0; }}
 </style>
 """, unsafe_allow_html=True)
@@ -71,6 +62,23 @@ IMAGEN_MASCOTA      = "Mascotas2026.png"
 IMG_FALLBACK        = ("https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/"
                        "Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg/"
                        "512px-Escudo_del_Banco_de_la_Rep%C3%BAblica_de_Colombia.svg.png")
+
+# ─────────────────────────────────────────────
+# FUNCIÓN DE LIMPIEZA EXTREMA
+# ─────────────────────────────────────────────
+def limpiar_texto(serie):
+    """Elimina espacios ocultos, saltos de línea y estandariza mayúsculas/minúsculas"""
+    return serie.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip().str.title()
+
+def safe_int(val):
+    """Convierte goles a entero de forma segura, ignorando NaNs y guiones"""
+    v = str(val).strip().lower()
+    if v in ["-", "", "nan", "nat", "none", "null"]:
+        return "-"
+    try:
+        return int(float(v))
+    except:
+        return "-"
 
 # ─────────────────────────────────────────────
 # ENCABEZADO
@@ -133,7 +141,7 @@ def card_podio(emoji, nombre, pts, bg, borde_color, pts_color):
     )
 
 def tarjeta_partido(local, visita, goles_l, goles_v, avanza=""):
-    jugado    = goles_l != "-" and goles_v != "-"
+    jugado    = str(goles_l) != "-" and str(goles_v) != "-"
     score_bg  = AZUL  if jugado else GRIS
     score_col = "#fff" if jugado else "#8A9BB0"
     avanza_html = (
@@ -270,10 +278,11 @@ if df is not None and not df.empty:
         if os.path.exists(RUTA_CONSOLIDADO):
             df_preds = pd.read_excel(RUTA_CONSOLIDADO)
             
-            # Limpieza absoluta de espacios en el consolidado maestro
-            df_preds['Equipo Local'] = df_preds['Equipo Local'].astype(str).str.strip()
-            df_preds['Equipo Visitante'] = df_preds['Equipo Visitante'].astype(str).str.strip()
+            # Limpieza Extrema de equipos
+            df_preds['Equipo Local'] = limpiar_texto(df_preds['Equipo Local'])
+            df_preds['Equipo Visitante'] = limpiar_texto(df_preds['Equipo Visitante'])
             
+            # Crear ID de partido único visual
             df_preds['Partido_Display'] = df_preds['Equipo Local'] + " vs " + df_preds['Equipo Visitante']
             partidos_disponibles = df_preds['Partido_Display'].unique()
             
@@ -290,43 +299,33 @@ if df is not None and not df.empty:
             goles_real_l, goles_real_v = None, None
             partido_jugado = False
             
-            # 1. Buscar en Fase de Grupos limpiando espacios de forma estricta
-            if os.path.exists(ARCHIVO_REALES_GRP):
-                df_r_grp = pd.read_excel(ARCHIVO_REALES_GRP)
-                df_r_grp['Equipo Local'] = df_r_grp['Equipo Local'].astype(str).str.strip()
-                df_r_grp['Equipo Visitante'] = df_r_grp['Equipo Visitante'].astype(str).str.strip()
-                
-                m_real = df_r_grp[(df_r_grp['Equipo Local'] == equipo_l) & (df_r_grp['Equipo Visitante'] == equipo_v)]
-                if not m_real.empty:
-                    val_l = str(m_real.iloc[0].get('Goles L')).strip()
-                    val_v = str(m_real.iloc[0].get('Goles V')).strip()
-                    if val_l != "-" and val_l != "" and val_l != "nan" and val_v != "-" and val_v != "" and val_v != "nan":
-                        try:
-                            goles_real_l = int(float(val_l))
-                            goles_real_v = int(float(val_v))
+            # LÓGICA DE BÚSQUEDA BIDIRECCIONAL EN BASES REALES
+            for archivo_real in [ARCHIVO_REALES_GRP, ARCHIVO_REALES_ELIM]:
+                if not partido_jugado and os.path.exists(archivo_real):
+                    df_r = pd.read_excel(archivo_real)
+                    df_r['Equipo Local'] = limpiar_texto(df_r['Equipo Local'])
+                    df_r['Equipo Visitante'] = limpiar_texto(df_r['Equipo Visitante'])
+                    
+                    # Buscar tanto en orden normal como invertido
+                    m_real = df_r[
+                        ((df_r['Equipo Local'] == equipo_l) & (df_r['Equipo Visitante'] == equipo_v)) |
+                        ((df_r['Equipo Local'] == equipo_v) & (df_r['Equipo Visitante'] == equipo_l))
+                    ]
+                    
+                    if not m_real.empty:
+                        row = m_real.iloc[0]
+                        g1 = safe_int(row.get('Goles L'))
+                        g2 = safe_int(row.get('Goles V'))
+                        
+                        if g1 != "-" and g2 != "-":
+                            # Asignar correctamente según el orden encontrado
+                            if row['Equipo Local'] == equipo_l:
+                                goles_real_l, goles_real_v = g1, g2
+                            else:
+                                goles_real_l, goles_real_v = g2, g1
                             partido_jugado = True
-                        except ValueError:
-                            pass
-            
-            # 2. Si no se ha encontrado, buscar en Eliminatorias aplicando el mismo filtro limpio
-            if not partido_jugado and os.path.exists(ARCHIVO_REALES_ELIM):
-                df_r_elim = pd.read_excel(ARCHIVO_REALES_ELIM)
-                df_r_elim['Equipo Local'] = df_r_elim['Equipo Local'].astype(str).str.strip()
-                df_r_elim['Equipo Visitante'] = df_r_elim['Equipo Visitante'].astype(str).str.strip()
-                
-                m_real = df_r_elim[(df_r_elim['Equipo Local'] == equipo_l) & (df_r_elim['Equipo Visitante'] == equipo_v)]
-                if not m_real.empty:
-                    val_l = str(m_real.iloc[0].get('Goles L')).strip()
-                    val_v = str(m_real.iloc[0].get('Goles V')).strip()
-                    if val_l != "-" and val_l != "" and val_l != "nan" and val_v != "-" and val_v != "" and val_v != "nan":
-                        try:
-                            goles_real_l = int(float(val_l))
-                            goles_real_v = int(float(val_v))
-                            partido_jugado = True
-                        except ValueError:
-                            pass
-            
-            # Mostrar la barra del estado real arriba de la lista interactiva
+
+            # Encabezado del partido
             if partido_jugado:
                 st.markdown(
                     f"<div style='background:{GRIS}; padding:6px 12px; border-radius:6px; margin-bottom:10px; font-size:0.82em; text-align:center; font-weight:600;'>"
@@ -346,9 +345,8 @@ if df is not None and not df.empty:
             for _, pred in df_partido.iterrows():
                 participante_nom = pred['Participante']
                 
-                # Conversión segura y limpia de las predicciones de los usuarios
-                pred_l = int(float(str(pred['Goles L']).strip())) if pd.notna(pred['Goles L']) else 0
-                pred_v = int(float(str(pred['Goles V']).strip())) if pd.notna(pred['Goles V']) else 0
+                pred_l = safe_int(pred.get('Goles L'))
+                pred_v = safe_int(pred.get('Goles V'))
                 
                 tarjeta_bg   = "#FFFFFF"
                 tarjeta_bord = BORDE
@@ -356,34 +354,29 @@ if df is not None and not df.empty:
                 badge_text   = "#5A6A85"
                 badge_label  = "Pendiente"
                 
-                if partido_jugado:
-                    tendencia_real = (goles_real_l > goles_real_v) - (goles_real_l < goles_real_v)
-                    tendencia_pred = (pred_l > pred_v) - (pred_l < pred_v)
+                # Evaluador de predicción
+                if pred_l == "-" or pred_v == "-":
+                    badge_label = "Sin predicción"
+                    txt_pred = "No registrada"
+                else:
+                    txt_pred = f"<b>{pred_l} - {pred_v}</b>"
                     
-                    if pred_l == goles_real_l and pred_v == goles_real_v:
-                        tarjeta_bg   = VERDE_CLA
-                        tarjeta_bord = VERDE
-                        badge_bg     = VERDE
-                        badge_text   = "#FFFFFF"
-                        badge_label  = "Marcador Exacto"
-                    elif tendencia_real == tendencia_pred:
-                        tarjeta_bg   = AZUL_CLA
-                        tarjeta_bord = AZUL_MED
-                        badge_bg     = AZUL_MED
-                        badge_text   = "#FFFFFF"
-                        badge_label  = "Acertó Resultado"
-                    else:
-                        tarjeta_bg   = ROJO_CLA
-                        tarjeta_bord = ROJO
-                        badge_bg     = ROJO
-                        badge_text   = "#FFFFFF"
-                        badge_label  = "Sin Acierto"
+                    if partido_jugado:
+                        tendencia_real = (goles_real_l > goles_real_v) - (goles_real_l < goles_real_v)
+                        tendencia_pred = (pred_l > pred_v) - (pred_l < pred_v)
+                        
+                        if pred_l == goles_real_l and pred_v == goles_real_v:
+                            tarjeta_bg, tarjeta_bord, badge_bg, badge_text, badge_label = VERDE_CLA, VERDE, VERDE, "#FFFFFF", "Marcador Exacto"
+                        elif tendencia_real == tendencia_pred:
+                            tarjeta_bg, tarjeta_bord, badge_bg, badge_text, badge_label = AZUL_CLA, AZUL_MED, AZUL_MED, "#FFFFFF", "Acertó Resultado"
+                        else:
+                            tarjeta_bg, tarjeta_bord, badge_bg, badge_text, badge_label = ROJO_CLA, ROJO, ROJO, "#FFFFFF", "Sin Acierto"
                 
                 html_predicciones += (
                     f"<div style='background:{tarjeta_bg}; border: 1px solid {tarjeta_bord}; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;'>"
                     f"<div>"
                     f"<div style='font-weight: 700; color: {TEXTO}; font-size: 0.85em;'>{participante_nom}</div>"
-                    f"<div style='font-size: 0.82em; color: #5A6A85; margin-top:2px;'>Predicción: <b>{pred_l} - {pred_v}</b></div>"
+                    f"<div style='font-size: 0.82em; color: #5A6A85; margin-top:2px;'>Predicción: {txt_pred}</div>"
                     f"</div>"
                     f"<span style='background:{badge_bg}; color:{badge_text}; font-size: 0.7em; font-weight: 700; padding: 4px 10px; border-radius: 12px;'>{badge_label}</span>"
                     f"</div>"
@@ -397,7 +390,7 @@ if df is not None and not df.empty:
             st.markdown(contenedor_html, unsafe_allow_html=True)
             
         else:
-            st.warning("⚠️ No se encontró el archivo 'consolidado_mundial.xlsx'. Asegúrate de generar el consolidado antes de subir la app.")
+            st.warning("⚠️ No se encontró el archivo 'consolidado_mundial.xlsx'.")
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -413,7 +406,9 @@ st.markdown(
 
 if os.path.exists(ARCHIVO_REALES_ELIM):
     df_elim   = pd.read_excel(ARCHIVO_REALES_ELIM)
-    df_fixture = df_elim.dropna(subset=["Equipo Local", "Equipo Visitante"])
+    df_elim['Equipo Local'] = limpiar_texto(df_elim['Equipo Local'])
+    df_elim['Equipo Visitante'] = limpiar_texto(df_elim['Equipo Visitante'])
+    df_fixture = df_elim[df_elim['Equipo Local'] != "Nan"]
 
     if not df_fixture.empty:
         for fase in df_fixture["Fase"].unique():
@@ -423,8 +418,7 @@ if os.path.exists(ARCHIVO_REALES_ELIM):
             cards = "".join(
                 tarjeta_partido(
                     row["Equipo Local"], row["Equipo Visitante"],
-                    int(row["Goles L"]) if pd.notna(row.get("Goles L")) and str(row["Goles L"]) != "-" else "-",
-                    int(row["Goles V"]) if pd.notna(row.get("Goles V")) and str(row["Goles V"]) != "-" else "-",
+                    safe_int(row.get("Goles L")), safe_int(row.get("Goles V")),
                     row["Clasificado a sig. ronda"] if pd.notna(row.get("Clasificado a sig. ronda")) else ""
                 )
                 for _, row in df_fase.iterrows()
@@ -438,15 +432,11 @@ if os.path.exists(ARCHIVO_REALES_ELIM):
 
 elif os.path.exists(ARCHIVO_REALES_GRP):
     df_grp = pd.read_excel(ARCHIVO_REALES_GRP)
+    df_grp['Equipo Local'] = limpiar_texto(df_grp['Equipo Local'])
+    df_grp['Equipo Visitante'] = limpiar_texto(df_grp['Equipo Visitante'])
     
-    # Filtrado ultra robusto para la sección de abajo (evitar mezclar texto con NaNs)
-    df_grp['Goles L_Clean'] = df_grp['Goles L'].astype(str).str.strip()
-    df_grp['Goles V_Clean'] = df_grp['Goles V'].astype(str).str.strip()
-    
-    df_jugados = df_grp[
-        (df_grp['Goles L_Clean'] != "-") & (df_grp['Goles L_Clean'] != "") & (df_grp['Goles L_Clean'] != "nan") &
-        (df_grp['Goles V_Clean'] != "-") & (df_grp['Goles V_Clean'] != "") & (df_grp['Goles V_Clean'] != "nan")
-    ]
+    # Filtrar solo registros que sí son equipos válidos
+    df_jugados = df_grp[df_grp['Equipo Local'] != "Nan"]
 
     if not df_jugados.empty:
         for grupo in df_jugados["Grupo"].unique():
@@ -454,8 +444,8 @@ elif os.path.exists(ARCHIVO_REALES_GRP):
             df_g = df_jugados[df_jugados["Grupo"] == grupo]
             cards = "".join(
                 tarjeta_partido(
-                    str(row["Equipo Local"]).strip(), str(row["Equipo Visitante"]).strip(),
-                    int(float(row["Goles L"])), int(float(row["Goles V"]))
+                    row["Equipo Local"], row["Equipo Visitante"],
+                    safe_int(row.get("Goles L")), safe_int(row.get("Goles V"))
                 )
                 for _, row in df_g.iterrows()
             )
