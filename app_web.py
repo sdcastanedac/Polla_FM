@@ -328,7 +328,7 @@ if df is not None and not df.empty:
             # Encabezado del partido
             if partido_jugado:
                 st.markdown(
-                    f"<div style='background:{GRIS}; padding:6px 12px; border-radius:6px; margin-bottom:10px; font-size:0.82em; text-align:center; font-weight:600;'>"
+                    f"<div style='background:{AZUL}; padding:6px 12px; border-radius:6px; margin-bottom:10px; font-size:0.82em; text-align:center; font-weight:600;'>"
                     f"Marcador Oficial: {equipo_l} {goles_real_l} - {goles_real_v} {equipo_v}"
                     f"</div>",
                     unsafe_allow_html=True
