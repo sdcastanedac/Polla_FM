@@ -66,11 +66,12 @@ IMG_FALLBACK        = ("https://upload.wikimedia.org/wikipedia/commons/thumb/b/b
 # HELPERS
 # ─────────────────────────────────────────────
 def limpiar_texto(serie):
-    """Elimina espacios ocultos y estandariza mayúsculas."""
     return serie.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip().str.title()
 
+def limpiar_str(val):
+    return str(val).replace(r'\s+', ' ').strip().title()
+
 def safe_int(val):
-    """Convierte goles a entero de forma segura."""
     v = str(val).strip().lower()
     if v in ["-", "", "nan", "nat", "none", "null"]:
         return "-"
@@ -78,6 +79,14 @@ def safe_int(val):
         return int(float(v))
     except Exception:
         return "-"
+
+def es_equipo_valido(nombre):
+    n = str(nombre).strip().lower()
+    return (
+        n not in ["nan", "", "none", "null"] and
+        not n.startswith("ganador") and
+        not n.startswith("perdedor")
+    )
 
 def card_podio(emoji, nombre, pts, bg, borde_color, pts_color):
     return (
@@ -127,37 +136,23 @@ def seccion_fase(label, icon="⚽"):
         f"{icon} {label}</div>"
     )
 
-def es_equipo_valido(nombre):
-    """Descarta placeholders como 'Ganador Partido X' o 'Perdedor Partido X'."""
-    n = str(nombre).strip().lower()
-    return (
-        n not in ["nan", "", "none", "null"] and
-        not n.startswith("ganador") and
-        not n.startswith("perdedor")
-    )
-
 # ─────────────────────────────────────────────
 # ENCABEZADO
 # ─────────────────────────────────────────────
 col_tit, col_logo = st.columns([7, 1])
-
 with col_tit:
     st.markdown(
         f"<div style='background:{AZUL};border-radius:12px;padding:20px 28px;margin-bottom:6px'>"
         f"<h1 style='color:#fff;font-size:2.5em;font-weight:800;margin:0;line-height:1.2'>"
-        f"Gran Polla Mundialista Callejera"
-        f"</h1>"
+        f"Gran Polla Mundialista Callejera</h1>"
         f"<p style='color:{DORADO};margin:5px 0 10px;font-size:1.12em;font-weight:400'>"
-        f"⚽ Panel oficial · Resultados y posiciones en tiempo real"
-        f"</p>"
+        f"⚽ Panel oficial · Resultados y posiciones en tiempo real</p>"
         f"<span style='background:{DORADO};color:{AZUL};font-size:.75em;font-weight:700;"
         f"padding:4px 14px;border-radius:20px;display:inline-block'>"
-        f"FIFA World Cup 2026 · EE.UU / México / Canadá"
-        f"</span>"
+        f"FIFA World Cup 2026 · EE.UU / México / Canadá</span>"
         f"</div>",
         unsafe_allow_html=True
     )
-
 with col_logo:
     if os.path.exists(IMAGEN_MASCOTA):
         st.image(IMAGEN_MASCOTA, width=210)
@@ -181,12 +176,11 @@ elif os.path.exists(RUTA_RANKING_GRUPOS):
     col_orden   = "Puntos_Grupos"
 
 # ─────────────────────────────────────────────
-# SECCIÓN PRINCIPAL: PODIO + TABLA + INSPECTOR
+# SECCIÓN PRINCIPAL
 # ─────────────────────────────────────────────
 if df is not None and not df.empty:
     df = df.sort_values(by=col_orden, ascending=False).reset_index(drop=True)
 
-    # Badge etapa
     st.markdown(
         f"<div style='display:inline-flex;align-items:center;gap:6px;"
         f"background:{AZUL_CLA};color:{AZUL};font-size:.8em;font-weight:600;"
@@ -216,10 +210,9 @@ if df is not None and not df.empty:
 
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
 
-    # ── Tabla + Inspector ──────────────────────────────────────────────────
     col_tabla, col_interactivo = st.columns(2)
 
-    # TABLA DE POSICIONES
+    # ── Tabla de posiciones ─────────────────────────────────────────────────
     with col_tabla:
         cols_mostrar = ["Participante", col_orden]
         if "Puntos_Grupos" in df.columns and col_orden != "Puntos_Grupos":
@@ -239,7 +232,6 @@ if df is not None and not df.empty:
             f"font-weight:600;text-align:left;position:sticky;top:0'>{labels.get(c,c)}</th>"
             for c in cols_mostrar
         )
-
         rows = ""
         for i, (_, row) in enumerate(df.iterrows()):
             bg    = AZUL_CLA if i == 0 else ("#F8F9FB" if i % 2 == 0 else "#fff")
@@ -275,7 +267,7 @@ if df is not None and not df.empty:
             unsafe_allow_html=True
         )
 
-    # INSPECTOR DE PREDICCIONES
+    # ── Inspector de predicciones ───────────────────────────────────────────
     with col_interactivo:
         st.markdown(
             f"<p style='font-size:.78em;font-weight:700;color:{AZUL};"
@@ -284,114 +276,166 @@ if df is not None and not df.empty:
             unsafe_allow_html=True
         )
 
-        if os.path.exists(RUTA_CONSOLIDADO):
+        if not os.path.exists(RUTA_CONSOLIDADO):
+            st.warning("⚠️ No se encontró el archivo 'consolidado_mundial.xlsx'.")
+
+        elif not os.path.exists(ARCHIVO_REALES_ELIM):
+            st.warning("⚠️ No se encontró el archivo 'Resultados_Reales_Eliminatorias.xlsx'.")
+
+        else:
+            # ── Cargar consolidado de predicciones ─────────────────────────
             df_preds = pd.read_excel(RUTA_CONSOLIDADO)
             df_preds['Equipo Local']     = limpiar_texto(df_preds['Equipo Local'])
             df_preds['Equipo Visitante'] = limpiar_texto(df_preds['Equipo Visitante'])
+            # La columna 'Llave' en el consolidado identifica unívocamente el partido
+            # (ej: "Partido 32" = Final, aunque los equipos sean iguales a uno de grupos)
+            col_llave_pred = None
+            for c in ['Llave', 'llave', 'Partido', 'ID']:
+                if c in df_preds.columns:
+                    col_llave_pred = c
+                    break
 
-            # ── Construir set de partidos DEFINIDOS en los archivos reales ──
-            # Solo incluye partidos con equipos reales confirmados
-            # (excluye NaN, 'Ganador Partido X', 'Perdedor Partido X')
-            partidos_definidos = set()
-            for archivo_real in [ARCHIVO_REALES_GRP, ARCHIVO_REALES_ELIM]:
-                if os.path.exists(archivo_real):
-                    df_r = pd.read_excel(archivo_real)
-                    df_r['Equipo Local']     = limpiar_texto(df_r['Equipo Local'])
-                    df_r['Equipo Visitante'] = limpiar_texto(df_r['Equipo Visitante'])
+            # ── Cargar resultados reales de eliminatorias ──────────────────
+            df_reales_elim = pd.read_excel(ARCHIVO_REALES_ELIM)
+            df_reales_elim['Equipo Local']     = limpiar_texto(df_reales_elim['Equipo Local'])
+            df_reales_elim['Equipo Visitante'] = limpiar_texto(df_reales_elim['Equipo Visitante'])
+            col_llave_real = None
+            for c in ['Llave', 'llave', 'Partido', 'ID']:
+                if c in df_reales_elim.columns:
+                    col_llave_real = c
+                    break
 
-                    for _, row in df_r.iterrows():
-                        loc = str(row['Equipo Local']).strip()
-                        vis = str(row['Equipo Visitante']).strip()
-                        if es_equipo_valido(loc) and es_equipo_valido(vis):
-                            partidos_definidos.add((loc, vis))
-                            # Orden inverso para cruce bidireccional
-                            partidos_definidos.add((vis, loc))
+            # ── Filtrar: solo llaves definidas (equipos válidos en reales) ─
+            if col_llave_real:
+                df_reales_validos = df_reales_elim[
+                    df_reales_elim['Equipo Local'].apply(es_equipo_valido) &
+                    df_reales_elim['Equipo Visitante'].apply(es_equipo_valido)
+                ]
+                llaves_definidas = set(df_reales_validos[col_llave_real].astype(str).str.strip())
+            else:
+                # Sin columna llave: filtrar por par de equipos válidos
+                llaves_definidas = None
 
-            # ── Filtrar predicciones: solo partidos definidos ──
-            mask = df_preds.apply(
-                lambda r: (
-                    str(r['Equipo Local']).strip(),
-                    str(r['Equipo Visitante']).strip()
-                ) in partidos_definidos,
-                axis=1
-            )
-            df_preds_filtrado = df_preds[mask].copy()
+            # ── Filtrar predicciones contra llaves definidas ───────────────
+            if col_llave_pred and llaves_definidas is not None:
+                # Cruce exacto por ID de llave — evita confundir
+                # "Portugal vs Colombia Partido 32 (Final)" con
+                # "Portugal vs Colombia Partido K (Grupos)"
+                df_preds['_llave_str'] = df_preds[col_llave_pred].astype(str).str.strip()
+                df_filtrado = df_preds[
+                    df_preds['_llave_str'].isin(llaves_definidas)
+                ].copy()
+            else:
+                # Fallback: cruce por equipos válidos en reales
+                pares_validos = set()
+                df_rv = df_reales_elim[
+                    df_reales_elim['Equipo Local'].apply(es_equipo_valido) &
+                    df_reales_elim['Equipo Visitante'].apply(es_equipo_valido)
+                ]
+                for _, r in df_rv.iterrows():
+                    pares_validos.add((r['Equipo Local'], r['Equipo Visitante']))
+                    pares_validos.add((r['Equipo Visitante'], r['Equipo Local']))
+                df_filtrado = df_preds[
+                    df_preds.apply(
+                        lambda r: (r['Equipo Local'], r['Equipo Visitante'])
+                        in pares_validos, axis=1
+                    )
+                ].copy()
 
-            if df_preds_filtrado.empty:
+            if df_filtrado.empty:
                 st.info("No hay predicciones disponibles para los partidos definidos aún.")
             else:
-                df_preds_filtrado['Partido_Display'] = (
-                    df_preds_filtrado['Equipo Local'] + " vs " +
-                    df_preds_filtrado['Equipo Visitante']
-                )
-                partidos_disponibles = df_preds_filtrado['Partido_Display'].unique()
+                # Etiqueta visual: "Partido 32 · Portugal vs Colombia"
+                if col_llave_pred:
+                    df_filtrado['Partido_Display'] = (
+                        df_filtrado[col_llave_pred].astype(str).str.strip()
+                        + " · "
+                        + df_filtrado['Equipo Local']
+                        + " vs "
+                        + df_filtrado['Equipo Visitante']
+                    )
+                else:
+                    df_filtrado['Partido_Display'] = (
+                        df_filtrado['Equipo Local'] + " vs " +
+                        df_filtrado['Equipo Visitante']
+                    )
 
-                partido_seleccionado = st.selectbox(
+                partidos_disponibles = df_filtrado['Partido_Display'].unique()
+
+                partido_sel = st.selectbox(
                     "Selecciona un encuentro:",
                     options=partidos_disponibles,
                     label_visibility="collapsed"
                 )
 
-                df_partido = df_preds_filtrado[
-                    df_preds_filtrado['Partido_Display'] == partido_seleccionado
+                df_partido = df_filtrado[
+                    df_filtrado['Partido_Display'] == partido_sel
                 ]
                 equipo_l = df_partido.iloc[0]['Equipo Local']
                 equipo_v = df_partido.iloc[0]['Equipo Visitante']
+                llave_sel = (
+                    str(df_partido.iloc[0][col_llave_pred]).strip()
+                    if col_llave_pred else None
+                )
 
-                # ── Buscar resultado real (bidireccional) ──
+                # ── Buscar resultado real por LLAVE (no por equipos) ───────
+                # Así "Partido 32" siempre busca en la fila correcta de reales,
+                # sin importar que los mismos equipos hayan jugado antes.
                 goles_real_l = goles_real_v = None
                 partido_jugado = False
 
-                for archivo_real in [ARCHIVO_REALES_GRP, ARCHIVO_REALES_ELIM]:
-                    if partido_jugado or not os.path.exists(archivo_real):
-                        continue
-                    df_r = pd.read_excel(archivo_real)
-                    df_r['Equipo Local']     = limpiar_texto(df_r['Equipo Local'])
-                    df_r['Equipo Visitante'] = limpiar_texto(df_r['Equipo Visitante'])
-
-                    m = df_r[
-                        ((df_r['Equipo Local'] == equipo_l) & (df_r['Equipo Visitante'] == equipo_v)) |
-                        ((df_r['Equipo Local'] == equipo_v) & (df_r['Equipo Visitante'] == equipo_l))
+                if col_llave_real and llave_sel:
+                    m = df_reales_elim[
+                        df_reales_elim[col_llave_real].astype(str).str.strip() == llave_sel
                     ]
-                    if not m.empty:
-                        row = m.iloc[0]
-                        g1 = safe_int(row.get('Goles L'))
-                        g2 = safe_int(row.get('Goles V'))
-                        if g1 != "-" and g2 != "-":
-                            if row['Equipo Local'] == equipo_l:
-                                goles_real_l, goles_real_v = g1, g2
-                            else:
-                                goles_real_l, goles_real_v = g2, g1
-                            partido_jugado = True
+                else:
+                    # Fallback por equipos si no hay columna llave
+                    m = df_reales_elim[
+                        ((df_reales_elim['Equipo Local'] == equipo_l) &
+                         (df_reales_elim['Equipo Visitante'] == equipo_v)) |
+                        ((df_reales_elim['Equipo Local'] == equipo_v) &
+                         (df_reales_elim['Equipo Visitante'] == equipo_l))
+                    ]
 
-                # ── Banner de resultado oficial ──
+                if not m.empty:
+                    row_real = m.iloc[0]
+                    g1 = safe_int(row_real.get('Goles L'))
+                    g2 = safe_int(row_real.get('Goles V'))
+                    if g1 != "-" and g2 != "-":
+                        # Asignar correctamente según orden de la fila real
+                        loc_real = limpiar_str(row_real['Equipo Local'])
+                        if loc_real == equipo_l:
+                            goles_real_l, goles_real_v = g1, g2
+                        else:
+                            goles_real_l, goles_real_v = g2, g1
+                        partido_jugado = True
+
+                # ── Banner de resultado oficial ──────────────────────────
                 if partido_jugado:
                     st.markdown(
-                        f"<div style='background:{AZUL_CLA};color:{AZUL};border:1px solid #B5D4F4;"
-                        f"padding:10px 14px;border-radius:8px;margin-bottom:12px;"
-                        f"font-size:0.92em;text-align:center;font-weight:700'>"
-                        f"⚽ Marcador Oficial: {equipo_l} {goles_real_l}"
-                        f" - {goles_real_v} {equipo_v}"
-                        f"</div>",
+                        f"<div style='background:{AZUL_CLA};color:{AZUL};"
+                        f"border:1px solid #B5D4F4;padding:10px 14px;border-radius:8px;"
+                        f"margin-bottom:12px;font-size:0.92em;text-align:center;"
+                        f"font-weight:700'>⚽ Marcador Oficial: {equipo_l} "
+                        f"{goles_real_l} - {goles_real_v} {equipo_v}</div>",
                         unsafe_allow_html=True
                     )
                 else:
                     st.markdown(
                         f"<div style='background:{GRIS};padding:6px 12px;border-radius:6px;"
-                        f"margin-bottom:10px;font-size:0.82em;text-align:center;color:#5A6A85'>"
-                        f"⏳ Partido definido pero aún sin resultado oficial."
+                        f"margin-bottom:10px;font-size:0.82em;text-align:center;"
+                        f"color:#5A6A85'>⏳ Partido definido pero aún sin resultado oficial."
                         f"</div>",
                         unsafe_allow_html=True
                     )
 
-                # ── Tarjetas de predicciones ──
+                # ── Tarjetas de predicciones ─────────────────────────────
                 html_preds = ""
                 for _, pred in df_partido.iterrows():
                     participante_nom = pred['Participante']
                     pred_l = safe_int(pred.get('Goles L'))
                     pred_v = safe_int(pred.get('Goles V'))
 
-                    # Defaults
                     tarjeta_bg   = "#FFFFFF"
                     tarjeta_bord = BORDE
                     badge_bg     = GRIS
@@ -403,23 +447,20 @@ if df is not None and not df.empty:
                         txt_pred    = "No registrada"
                     else:
                         txt_pred = f"<b>{pred_l} - {pred_v}</b>"
-
                         if partido_jugado:
-                            t_real = (goles_real_l > goles_real_v) - (goles_real_l < goles_real_v)
+                            t_real = ((goles_real_l > goles_real_v) -
+                                      (goles_real_l < goles_real_v))
                             t_pred = (pred_l > pred_v) - (pred_l < pred_v)
 
                             if pred_l == goles_real_l and pred_v == goles_real_v:
-                                # Verde: marcador exacto
                                 tarjeta_bg, tarjeta_bord = VERDE_CLA, VERDE
                                 badge_bg, badge_text     = VERDE, "#FFFFFF"
                                 badge_label              = "✅ Marcador Exacto"
                             elif t_real == t_pred:
-                                # Azul: acertó tendencia (ganador/empate)
                                 tarjeta_bg, tarjeta_bord = AZUL_CLA, AZUL_MED
                                 badge_bg, badge_text     = AZUL_MED, "#FFFFFF"
                                 badge_label              = "↗ Acertó Resultado"
                             else:
-                                # Rojo: no acertó nada
                                 tarjeta_bg, tarjeta_bord = ROJO_CLA, ROJO
                                 badge_bg, badge_text     = ROJO, "#FFFFFF"
                                 badge_label              = "✗ Sin Acierto"
@@ -432,7 +473,8 @@ if df is not None and not df.empty:
                         f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>"
                         f"<span style='font-weight:700;color:{TEXTO};font-size:0.84em'>"
                         f"{participante_nom}</span>"
-                        f"<span style='font-size:0.82em;color:#5A6A85'>· Pred: {txt_pred}</span>"
+                        f"<span style='font-size:0.82em;color:#5A6A85'>"
+                        f"· Pred: {txt_pred}</span>"
                         f"</div>"
                         f"<span style='background:{badge_bg};color:{badge_text};"
                         f"font-size:0.68em;font-weight:700;padding:2px 8px;"
@@ -443,13 +485,9 @@ if df is not None and not df.empty:
                 st.markdown(
                     f"<div style='background:#fff;border:0.5px solid {BORDE};"
                     f"border-radius:10px;padding:12px;height:300px;overflow-y:auto'>"
-                    f"{html_preds}"
-                    f"</div>",
+                    f"{html_preds}</div>",
                     unsafe_allow_html=True
                 )
-
-        else:
-            st.warning("⚠️ No se encontró el archivo 'consolidado_mundial.xlsx'.")
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -463,17 +501,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ELIMINATORIAS
 if os.path.exists(ARCHIVO_REALES_ELIM):
     df_elim = pd.read_excel(ARCHIVO_REALES_ELIM)
     df_elim['Equipo Local']     = limpiar_texto(df_elim['Equipo Local'])
     df_elim['Equipo Visitante'] = limpiar_texto(df_elim['Equipo Visitante'])
-
     df_fixture = df_elim[
         df_elim['Equipo Local'].apply(es_equipo_valido) &
         df_elim['Equipo Visitante'].apply(es_equipo_valido)
     ]
-
     if not df_fixture.empty:
         for fase in df_fixture["Fase"].unique():
             st.markdown(seccion_fase(fase, "🏆"), unsafe_allow_html=True)
@@ -494,17 +529,14 @@ if os.path.exists(ARCHIVO_REALES_ELIM):
     else:
         st.info("Aún no se han definido las llaves eliminatorias.")
 
-# FASE DE GRUPOS
 elif os.path.exists(ARCHIVO_REALES_GRP):
     df_grp = pd.read_excel(ARCHIVO_REALES_GRP)
     df_grp['Equipo Local']     = limpiar_texto(df_grp['Equipo Local'])
     df_grp['Equipo Visitante'] = limpiar_texto(df_grp['Equipo Visitante'])
-
     df_validos = df_grp[
         df_grp['Equipo Local'].apply(es_equipo_valido) &
         df_grp['Equipo Visitante'].apply(es_equipo_valido)
     ]
-
     if not df_validos.empty:
         col_grupo = "Grupo" if "Grupo" in df_validos.columns else df_validos.columns[1]
         for grupo in df_validos[col_grupo].unique():
@@ -523,7 +555,6 @@ elif os.path.exists(ARCHIVO_REALES_GRP):
             )
     else:
         st.info("Aún no hay marcadores registrados. ¡A la espera del partido inaugural!")
-
 else:
     st.info("No se encontró archivo de resultados. Recuerda subirlo al repositorio.")
 
