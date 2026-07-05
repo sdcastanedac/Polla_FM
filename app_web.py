@@ -287,13 +287,13 @@ if df is not None and not df.empty:
             df_preds = pd.read_excel(RUTA_CONSOLIDADO)
             df_preds['Equipo Local']     = limpiar_texto(df_preds['Equipo Local'])
             df_preds['Equipo Visitante'] = limpiar_texto(df_preds['Equipo Visitante'])
-            # La columna 'Llave' en el consolidado identifica unívocamente el partido
-            # (ej: "Partido 32" = Final, aunque los equipos sean iguales a uno de grupos)
             col_llave_pred = None
             for c in ['Llave', 'llave', 'Partido', 'ID']:
                 if c in df_preds.columns:
                     col_llave_pred = c
                     break
+            if col_llave_pred:
+                df_preds['_llave_str'] = df_preds[col_llave_pred].astype(str).str.strip()
 
             # ── Cargar resultados reales de eliminatorias ──────────────────
             df_reales_elim = pd.read_excel(ARCHIVO_REALES_ELIM)
@@ -304,63 +304,39 @@ if df is not None and not df.empty:
                 if c in df_reales_elim.columns:
                     col_llave_real = c
                     break
-
-            # ── Filtrar: solo llaves definidas (equipos válidos en reales) ─
             if col_llave_real:
-                df_reales_validos = df_reales_elim[
-                    df_reales_elim['Equipo Local'].apply(es_equipo_valido) &
-                    df_reales_elim['Equipo Visitante'].apply(es_equipo_valido)
-                ]
-                llaves_definidas = set(df_reales_validos[col_llave_real].astype(str).str.strip())
-            else:
-                # Sin columna llave: filtrar por par de equipos válidos
-                llaves_definidas = None
+                df_reales_elim['_llave_str'] = df_reales_elim[col_llave_real].astype(str).str.strip()
 
-            # ── Filtrar predicciones contra llaves definidas ───────────────
-            if col_llave_pred and llaves_definidas is not None:
-                # Cruce exacto por ID de llave — evita confundir
-                # "Portugal vs Colombia Partido 32 (Final)" con
-                # "Portugal vs Colombia Partido K (Grupos)"
-                df_preds['_llave_str'] = df_preds[col_llave_pred].astype(str).str.strip()
-                df_filtrado = df_preds[
-                    df_preds['_llave_str'].isin(llaves_definidas)
-                ].copy()
-            else:
-                # Fallback: cruce por equipos válidos en reales
-                pares_validos = set()
-                df_rv = df_reales_elim[
-                    df_reales_elim['Equipo Local'].apply(es_equipo_valido) &
-                    df_reales_elim['Equipo Visitante'].apply(es_equipo_valido)
-                ]
-                for _, r in df_rv.iterrows():
-                    pares_validos.add((r['Equipo Local'], r['Equipo Visitante']))
-                    pares_validos.add((r['Equipo Visitante'], r['Equipo Local']))
-                df_filtrado = df_preds[
-                    df_preds.apply(
-                        lambda r: (r['Equipo Local'], r['Equipo Visitante'])
-                        in pares_validos, axis=1
-                    )
-                ].copy()
+            # ── Llaves reales ya definidas (equipos reales conocidos): esto
+            # incluye tanto partidos ya jugados como próximos a jugar cuyo
+            # cruce ya se conoce; se excluyen los que aún dependen de un
+            # "Ganador X" / "Perdedor X" sin resolver ──
+            df_reales_validos = df_reales_elim[
+                df_reales_elim['Equipo Local'].apply(es_equipo_valido) &
+                df_reales_elim['Equipo Visitante'].apply(es_equipo_valido)
+            ].copy()
 
-            if df_filtrado.empty:
-                st.info("No hay predicciones disponibles para los partidos definidos aún.")
+            if df_reales_validos.empty or not col_llave_real or not col_llave_pred:
+                st.info("No hay partidos definidos aún.")
             else:
-                # Etiqueta visual: "Partido 32 · Portugal vs Colombia"
-                if col_llave_pred:
-                    df_filtrado['Partido_Display'] = (
-                        df_filtrado[col_llave_pred].astype(str).str.strip()
-                        + " · "
-                        + df_filtrado['Equipo Local']
-                        + " vs "
-                        + df_filtrado['Equipo Visitante']
-                    )
-                else:
-                    df_filtrado['Partido_Display'] = (
-                        df_filtrado['Equipo Local'] + " vs " +
-                        df_filtrado['Equipo Visitante']
-                    )
+                # El desplegable se arma a partir del partido REAL (una sola
+                # entrada por llave). Antes se armaba con lo que cada
+                # participante predijo, y como en Octavos/Cuartos cada uno
+                # pudo haber adivinado un rival distinto para la misma llave
+                # (p.ej. "Partido 17 · Canadá vs Marruecos" para uno y
+                # "Partido 17 · Canadá vs Países Bajos" para otro), la lista
+                # salía duplicada y además ocultaba a casi todos los
+                # participantes del inspector. Dieciseisavos no sufre esto
+                # porque ahí el cruce es el mismo fixture fijo para todos.
+                df_reales_validos['Partido_Display'] = (
+                    df_reales_validos[col_llave_real].astype(str).str.strip()
+                    + " · "
+                    + df_reales_validos['Equipo Local']
+                    + " vs "
+                    + df_reales_validos['Equipo Visitante']
+                )
 
-                partidos_disponibles = df_filtrado['Partido_Display'].unique()
+                partidos_disponibles = df_reales_validos['Partido_Display'].tolist()
 
                 partido_sel = st.selectbox(
                     "Selecciona un encuentro:",
@@ -368,49 +344,25 @@ if df is not None and not df.empty:
                     label_visibility="collapsed"
                 )
 
-                df_partido = df_filtrado[
-                    df_filtrado['Partido_Display'] == partido_sel
-                ]
-                equipo_l = df_partido.iloc[0]['Equipo Local']
-                equipo_v = df_partido.iloc[0]['Equipo Visitante']
-                llave_sel = (
-                    str(df_partido.iloc[0][col_llave_pred]).strip()
-                    if col_llave_pred else None
+                fila_real = df_reales_validos[
+                    df_reales_validos['Partido_Display'] == partido_sel
+                ].iloc[0]
+
+                llave_sel = str(fila_real[col_llave_real]).strip()
+                equipo_l  = fila_real['Equipo Local']
+                equipo_v  = fila_real['Equipo Visitante']
+                real_clas = (
+                    limpiar_str(fila_real['Clasificado a sig. ronda'])
+                    if pd.notna(fila_real.get('Clasificado a sig. ronda')) else None
                 )
 
-                # ── Buscar resultado real por LLAVE (no por equipos) ───────
-                # Así "Partido 32" siempre busca en la fila correcta de reales,
-                # sin importar que los mismos equipos hayan jugado antes.
-                goles_real_l = goles_real_v = None
-                partido_jugado = False
+                goles_real_l  = safe_int(fila_real.get('Goles L'))
+                goles_real_v  = safe_int(fila_real.get('Goles V'))
+                partido_jugado = goles_real_l != "-" and goles_real_v != "-"
 
-                if col_llave_real and llave_sel:
-                    m = df_reales_elim[
-                        df_reales_elim[col_llave_real].astype(str).str.strip() == llave_sel
-                    ]
-                else:
-                    # Fallback por equipos si no hay columna llave
-                    m = df_reales_elim[
-                        ((df_reales_elim['Equipo Local'] == equipo_l) &
-                         (df_reales_elim['Equipo Visitante'] == equipo_v)) |
-                        ((df_reales_elim['Equipo Local'] == equipo_v) &
-                         (df_reales_elim['Equipo Visitante'] == equipo_l))
-                    ]
-
-                if not m.empty:
-                    row_real = m.iloc[0]
-                    g1 = safe_int(row_real.get('Goles L'))
-                    g2 = safe_int(row_real.get('Goles V'))
-                    if g1 != "-" and g2 != "-":
-                        # Asignar correctamente según orden de la fila real
-                        loc_real = limpiar_str(row_real['Equipo Local'])
-                        if loc_real == equipo_l:
-                            goles_real_l, goles_real_v = g1, g2
-                        else:
-                            goles_real_l, goles_real_v = g2, g1
-                        partido_jugado = True
-
-                # ── Banner de resultado oficial ──────────────────────────
+                # ── Banner de resultado oficial (siempre con los equipos
+                # REALES de esta llave, nunca con lo que haya predicho algún
+                # participante) ─────────────────────────────────────────────
                 if partido_jugado:
                     st.markdown(
                         f"<div style='background:{AZUL_CLA};color:{AZUL};"
@@ -424,70 +376,112 @@ if df is not None and not df.empty:
                     st.markdown(
                         f"<div style='background:{GRIS};padding:6px 12px;border-radius:6px;"
                         f"margin-bottom:10px;font-size:0.82em;text-align:center;"
-                        f"color:#5A6A85'>⏳ Partido definido pero aún sin resultado oficial."
-                        f"</div>",
+                        f"color:#5A6A85'>⏳ Llave definida ({equipo_l} vs {equipo_v}), "
+                        f"aún sin resultado oficial.</div>",
                         unsafe_allow_html=True
                     )
 
-                # ── Tarjetas de predicciones ─────────────────────────────
-                html_preds = ""
-                for _, pred in df_partido.iterrows():
-                    participante_nom = pred['Participante']
-                    pred_l = safe_int(pred.get('Goles L'))
-                    pred_v = safe_int(pred.get('Goles V'))
+                # ── Todas las predicciones registradas para esta llave, sin
+                # importar qué rival haya adivinado cada participante ───────
+                df_partido = df_preds[df_preds['_llave_str'] == llave_sel]
 
-                    tarjeta_bg   = "#FFFFFF"
-                    tarjeta_bord = BORDE
-                    badge_bg     = GRIS
-                    badge_text   = "#5A6A85"
-                    badge_label  = "Pendiente"
+                if df_partido.empty:
+                    st.info("Nadie registró una predicción para esta llave.")
+                else:
+                    html_preds = ""
+                    for _, pred in df_partido.iterrows():
+                        participante_nom = pred['Participante']
+                        pred_l     = safe_int(pred.get('Goles L'))
+                        pred_v     = safe_int(pred.get('Goles V'))
+                        pred_local = pred.get('Equipo Local')
+                        pred_visit = pred.get('Equipo Visitante')
+                        pred_clas  = (
+                            limpiar_str(pred.get('Clasificado a sig. ronda'))
+                            if pd.notna(pred.get('Clasificado a sig. ronda')) else None
+                        )
 
-                    if pred_l == "-" or pred_v == "-":
-                        badge_label = "Sin predicción"
-                        txt_pred    = "No registrada"
-                    else:
-                        txt_pred = f"<b>{pred_l} - {pred_v}</b>"
-                        if partido_jugado:
-                            t_real = ((goles_real_l > goles_real_v) -
-                                      (goles_real_l < goles_real_v))
-                            t_pred = (pred_l > pred_v) - (pred_l < pred_v)
+                        # ¿El cruce que predijo este participante es
+                        # realmente el que se jugó (mismos 2 equipos), sin
+                        # importar el orden Local/Visitante?
+                        cruce_real          = False
+                        gr_l_cmp, gr_v_cmp  = goles_real_l, goles_real_v
+                        if pd.notna(pred_local) and pd.notna(pred_visit):
+                            if pred_local == equipo_l and pred_visit == equipo_v:
+                                cruce_real = True
+                            elif pred_local == equipo_v and pred_visit == equipo_l:
+                                cruce_real = True
+                                gr_l_cmp, gr_v_cmp = goles_real_v, goles_real_l
 
-                            if pred_l == goles_real_l and pred_v == goles_real_v:
-                                tarjeta_bg, tarjeta_bord = VERDE_CLA, VERDE
-                                badge_bg, badge_text     = VERDE, "#FFFFFF"
-                                badge_label              = "✅ Marcador Exacto"
-                            elif t_real == t_pred:
-                                tarjeta_bg, tarjeta_bord = AZUL_CLA, AZUL_MED
-                                badge_bg, badge_text     = AZUL_MED, "#FFFFFF"
-                                badge_label              = "↗ Acertó Resultado"
+                        tarjeta_bg   = "#FFFFFF"
+                        tarjeta_bord = BORDE
+                        badge_bg     = GRIS
+                        badge_text   = "#5A6A85"
+                        badge_label  = "Pendiente"
+
+                        if pred_l == "-" or pred_v == "-":
+                            badge_label = "Sin predicción"
+                            txt_pred    = "No registrada"
+                        else:
+                            txt_pred = f"<b>{pred_l} - {pred_v}</b>"
+
+                            if not cruce_real:
+                                # Predijo un rival distinto al que realmente
+                                # jugó esta llave: el marcador no es comparable,
+                                # pero si igual acertó quién clasificó, sí vale.
+                                txt_pred += (
+                                    f" <span style='color:#8A9BB0;font-size:.9em'>"
+                                    f"({pred_local} vs {pred_visit})</span>"
+                                )
+                                if partido_jugado and real_clas and pred_clas == real_clas:
+                                    tarjeta_bg, tarjeta_bord = DORADO_CLA, DORADO
+                                    badge_bg, badge_text     = DORADO, AZUL
+                                    badge_label              = "🔄 Rival distinto · ✅ Acertó quién avanza"
+                                else:
+                                    tarjeta_bg, tarjeta_bord = GRIS, "#B0B7C3"
+                                    badge_bg, badge_text     = "#B0B7C3", "#FFFFFF"
+                                    badge_label              = "🔄 Cruce equivocado"
+                            elif partido_jugado:
+                                t_real = (gr_l_cmp > gr_v_cmp) - (gr_l_cmp < gr_v_cmp)
+                                t_pred = (pred_l > pred_v) - (pred_l < pred_v)
+
+                                if pred_l == gr_l_cmp and pred_v == gr_v_cmp:
+                                    tarjeta_bg, tarjeta_bord = VERDE_CLA, VERDE
+                                    badge_bg, badge_text     = VERDE, "#FFFFFF"
+                                    badge_label              = "✅ Marcador Exacto"
+                                elif t_real == t_pred:
+                                    tarjeta_bg, tarjeta_bord = AZUL_CLA, AZUL_MED
+                                    badge_bg, badge_text     = AZUL_MED, "#FFFFFF"
+                                    badge_label              = "↗ Acertó Resultado"
+                                else:
+                                    tarjeta_bg, tarjeta_bord = ROJO_CLA, ROJO
+                                    badge_bg, badge_text     = ROJO, "#FFFFFF"
+                                    badge_label              = "✗ Sin Acierto"
                             else:
-                                tarjeta_bg, tarjeta_bord = ROJO_CLA, ROJO
-                                badge_bg, badge_text     = ROJO, "#FFFFFF"
-                                badge_label              = "✗ Sin Acierto"
+                                badge_label = "⏳ Pendiente"
 
-                    html_preds += (
-                        f"<div style='background:{tarjeta_bg};border:1px solid {tarjeta_bord};"
-                        f"border-radius:6px;padding:6px 12px;margin-bottom:5px;"
-                        f"display:flex;justify-content:space-between;align-items:center'>"
-                        f"<div style='display:flex;align-items:center;gap:8px;"
-                        f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>"
-                        f"<span style='font-weight:700;color:{TEXTO};font-size:0.84em'>"
-                        f"{participante_nom}</span>"
-                        f"<span style='font-size:0.82em;color:#5A6A85'>"
-                        f"· Pred: {txt_pred}</span>"
-                        f"</div>"
-                        f"<span style='background:{badge_bg};color:{badge_text};"
-                        f"font-size:0.68em;font-weight:700;padding:2px 8px;"
-                        f"border-radius:10px;flex-shrink:0'>{badge_label}</span>"
-                        f"</div>"
+                        html_preds += (
+                            f"<div style='background:{tarjeta_bg};border:1px solid {tarjeta_bord};"
+                            f"border-radius:6px;padding:6px 12px;margin-bottom:5px;"
+                            f"display:flex;justify-content:space-between;align-items:center'>"
+                            f"<div style='display:flex;align-items:center;gap:8px;"
+                            f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>"
+                            f"<span style='font-weight:700;color:{TEXTO};font-size:0.84em'>"
+                            f"{participante_nom}</span>"
+                            f"<span style='font-size:0.82em;color:#5A6A85'>"
+                            f"· Pred: {txt_pred}</span>"
+                            f"</div>"
+                            f"<span style='background:{badge_bg};color:{badge_text};"
+                            f"font-size:0.68em;font-weight:700;padding:2px 8px;"
+                            f"border-radius:10px;flex-shrink:0'>{badge_label}</span>"
+                            f"</div>"
+                        )
+
+                    st.markdown(
+                        f"<div style='background:#fff;border:0.5px solid {BORDE};"
+                        f"border-radius:10px;padding:12px;height:300px;overflow-y:auto'>"
+                        f"{html_preds}</div>",
+                        unsafe_allow_html=True
                     )
-
-                st.markdown(
-                    f"<div style='background:#fff;border:0.5px solid {BORDE};"
-                    f"border-radius:10px;padding:12px;height:300px;overflow-y:auto'>"
-                    f"{html_preds}</div>",
-                    unsafe_allow_html=True
-                )
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
