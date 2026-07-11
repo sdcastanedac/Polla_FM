@@ -447,15 +447,15 @@ if df is not None and not df.empty:
                                 if pred_l == gr_l_cmp and pred_v == gr_v_cmp:
                                     tarjeta_bg, tarjeta_bord = VERDE_CLA, VERDE
                                     badge_bg, badge_text     = VERDE, "#FFFFFF"
-                                    badge_label              = "✅ Marcador Exacto"
+                                    badge_label              = "✅ Acertó Marcador Exacto"
                                 elif t_real == t_pred:
                                     tarjeta_bg, tarjeta_bord = AZUL_CLA, AZUL_MED
                                     badge_bg, badge_text     = AZUL_MED, "#FFFFFF"
-                                    badge_label              = "↗ Acertó Resultado"
+                                    badge_label              = "↗ Acertó Resultado pero no marcador"
                                 else:
                                     tarjeta_bg, tarjeta_bord = ROJO_CLA, ROJO
                                     badge_bg, badge_text     = ROJO, "#FFFFFF"
-                                    badge_label              = "✗ Sin Acierto"
+                                    badge_label              = "✗ No acertó resultado ni marcador"
                             else:
                                 badge_label = "⏳ Pendiente"
 
